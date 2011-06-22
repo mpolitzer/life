@@ -5,8 +5,8 @@ OUT=tmp
 CC=gcc
 RM=rm
 MV=mv
-CFLAGS=-g -O0 -Wshadow -Wall `pkg-config sdl SDL_ttf gl glu --cflags`
-LIBS=`pkg-config sdl SDL_ttf gl glu --libs`
+CFLAGS=-g -O0 -Wshadow -Wall `pkg-config sdl gl glu --cflags`
+LIBS=`pkg-config sdl gl glu --libs`
 
 MAKEFILE=Makefile
 OBJ=$(SRC:.c=.o)

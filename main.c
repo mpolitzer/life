@@ -40,7 +40,6 @@ static int M[2][TABLE_WIDTH][TABLE_HEIGHT];
 static int create_gl_window(char *title, int width, int height, int fs);
 static int handle_events(void);
 static void parse_options(int argc, char *argv[]);
-static void create_gl_textures(const char *font_name);
 
 static void table_init(void);
 static void table_step(int k);
@@ -66,16 +65,10 @@ int main(int argc, char *argv[])
 	parse_options(argc, argv);
 	assert(SDL_Init(SDL_INIT_EVERYTHING) >= 0);
 	atexit(SDL_Quit);
-	assert(create_gl_window("td",
+	assert(create_gl_window("life",
 				cmd_opts.width ? cmd_opts.width : 800,
 				cmd_opts.height ? cmd_opts.height : 600,
 				cmd_opts.fs) == 0);
-	if(TTF_Init() == -1){
-		fprintf(stderr, "TTF_Inint: %s\n", TTF_GetError());
-		exit(1);
-	}
-	create_gl_textures(cmd_opts.font_name
-			? cmd_opts.font_name : "LiberationMono-Bold.ttf");
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	table_init();
 	while (handle_events()){
@@ -327,35 +320,5 @@ void parse_options(int argc, char *argv[])
 			print_usage(argv[0]);
 			exit(0);
 		}
-	}
-}
-
-void create_gl_textures(const char *font_name)
-{
-	int i;
-	char buff[2] = "0";
-	SDL_Color color = {0xFF, 0xFF, 0xFF};
-
-
-	TTF_Font *font = TTF_OpenFont(font_name, 16);
-	if(!font) {
-		printf("TTF_OpenFont: %s\n", TTF_GetError());
-		exit(2);
-	}
-	glGenTextures(10, gl_num);
-	for (i=0; i < 10; i++){
-		buff[0] = i+'0';
-		SDL_Surface *num = TTF_RenderText_Solid(font, buff, color);
-
-		printf("texture: %d - surface: %p\n", gl_num[i], num);
-		glBindTexture(GL_TEXTURE_2D, gl_num[i]);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-				GL_LINEAR);
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-				GL_LINEAR);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-				num[i].w, num[i].h, 0, GL_BGRA,
-				GL_UNSIGNED_BYTE, num[i].pixels);
-		SDL_FreeSurface(num);
 	}
 }
