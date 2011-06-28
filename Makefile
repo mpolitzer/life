@@ -5,8 +5,12 @@ OUT=tmp
 CC=gcc
 RM=rm
 MV=mv
-CFLAGS=-g -O0 -Wshadow -Wall `pkg-config sdl gl glu --cflags`
+
+CFLAGS=-g -O3 -Wshadow -Wall `pkg-config sdl gl glu --cflags`
 LIBS=`pkg-config sdl gl glu --libs`
+
+# WITH OPENMP
+CFLAGS+= -fopenmp -DWITH_OPENMP
 
 MAKEFILE=Makefile
 OBJ=$(SRC:.c=.o)

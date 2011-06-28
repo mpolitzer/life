@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include <assert.h>
 
@@ -18,17 +19,15 @@
 #include <SDL_ttf.h>
 
 struct cmd_opts {
-	short width, height;
-	char *font_name;
+	int width, height;
+	int mod_val;
 	short fs:1;
-	short step:1;
 };
 
+/* default options */
 static struct cmd_opts cmd_opts = {
-	800,600, 0
+	800,800, 2, 0
 };
-
-static GLuint gl_num[10];
 
 #define TABLE_WIDTH	100
 #define TABLE_HEIGHT	100
@@ -41,11 +40,11 @@ static int create_gl_window(char *title, int width, int height, int fs);
 static int handle_events(void);
 static void parse_options(int argc, char *argv[]);
 
-static void table_init(void);
-static void table_step(int k);
+static void life_init(void);
+static void life_step(int k);
 static int do_life(int n);
-static void table_draw_term(int k);
-static void table_draw(int k);
+static void life_draw_term(int k);
+static void life_draw(int k);
 
 unsigned int get_elapsed (void)
 {
@@ -66,11 +65,11 @@ int main(int argc, char *argv[])
 	assert(SDL_Init(SDL_INIT_EVERYTHING) >= 0);
 	atexit(SDL_Quit);
 	assert(create_gl_window("life",
-				cmd_opts.width ? cmd_opts.width : 800,
-				cmd_opts.height ? cmd_opts.height : 600,
+				cmd_opts.width,
+				cmd_opts.height,
 				cmd_opts.fs) == 0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	table_init();
+	life_init();
 	while (handle_events()){
 		t += get_elapsed();
 		if (t >= 1000){
@@ -80,41 +79,27 @@ int main(int argc, char *argv[])
 		}
 		i++;
 		b = !b;
-		table_draw(b);
-		table_step(b);
+		life_draw(b);
+		life_step(b);
 	}
 	return 0;
 }
 
 /* each place is 0 for empty or !0 for "there is something here". */
-void table_init(void)
+void life_init(void)
 {
 	int i, j;
-	int table[4][4] = {
-		{0, 1, 0, 0},
-		{0, 0, 1, 0},
-		{1, 1, 1, 0},
-		{0, 0, 0, 0},
-	};
-#if 1
-	for (i=0; i < 4; i++){
-		for (j=0; j < 4; j++){
-			M[1][i][j] = table[i][j];
-			M[0][i][j] = table[i][j];
-		}
-	}
-#else
+	srand(time(NULL));
 	for (i=0; i < TABLE_HEIGHT; i++){
 		for (j=0; j < TABLE_WIDTH; j++){
-			int init = rand() % 2;
+			int init = rand() % cmd_opts.mod_val;
 			M[1][i][j] = init;
 			M[0][i][j] = init;
 		}
 	}
-#endif
 }
 
-void table_draw(int k)
+void life_draw(int k)
 {
 	int i, j;
 
@@ -127,15 +112,14 @@ void table_draw(int k)
 			glBegin(GL_QUADS);
 			if (M[k][i][j]){
 				float r = 0.5f, g =0.5f, b = 0.5f;
-				if (i%2) r = 1.0f;
-				if (j%2) g = 1.0f;
+				if (i&1) r = 1.0f;
+				if (j&1) g = 1.0f;
 
 				glColor3f(r, g, b);
-//				glBindTexture(GL_TEXTURE_2D, gl_num[i%10]);
-				glTexCoord2i(0, 0); glVertex3i(i  , j  , 0);
-				glTexCoord2i(1, 0); glVertex3i(i+1, j  , 0);
-				glTexCoord2i(1, 1); glVertex3i(i+1, j+1, 0);
-				glTexCoord2i(0, 1); glVertex3i(i  , j+1, 0);
+				glVertex3i(i  , j  , 0);
+				glVertex3i(i+1, j  , 0);
+				glVertex3i(i+1, j+1, 0);
+				glVertex3i(i  , j+1, 0);
 			}
 			glEnd();
 		}
@@ -143,13 +127,13 @@ void table_draw(int k)
 	SDL_GL_SwapBuffers();
 }
 
-void table_draw_term(int k)
+void life_draw_term(int k)
 {
 	int i, j;
 
 	for (i=0; i < TABLE_WIDTH; i++){
 		for (j=0; j < TABLE_HEIGHT; j++){
-			printf("%d ", M[k][i][j] ? 1 : 0);
+			printf("%d", M[k][i][j] ? 1 : 0);
 		}
 		printf("\n");
 	}
@@ -167,28 +151,32 @@ void table_draw_term(int k)
 	as if by reproduction.
 */
 /* return:
- * 1	- create/recreate cell.
- * 0	- kill cell.
+ * 1	- spawn cell.
+ * 0	- do nothing.
+ * -1	- kill cell.
  */
-int do_life(int n)
+static int do_life(int n)
 {
 	if (n < 2 || n > 3) return -1;
 	if (n == 2) return 0;
 	return 1;
 }
 
-void table_step(int k)
+void life_step(int k)
 {
 	int i, j, w;
 	int nk = k ^ 1;
 	int neighbours;
-	/* index mask */
+	/* neighbours indexes */
 	const int mask[][2] = {
 		{ -1, -1}, {  0, -1}, {  1, -1},
 		{ -1,  0},            {  1,  0},
 		{ -1,  1}, {  0,  1}, {  1,  1},
 	};
 
+#ifdef WITH_OPENMP
+#pragma omp parallel for private (i,j,w,neighbours)
+#endif
 	for (i=0; i < TABLE_WIDTH; i++){
 		for (j=0; j < TABLE_HEIGHT; j++){
 			int state;
@@ -210,6 +198,7 @@ void table_step(int k)
 		}
 	}
 }
+
 int create_gl_window(char *title, int width, int height, int fs)
 {
 	int flags = SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_OPENGL;
@@ -259,17 +248,8 @@ int create_gl_window(char *title, int width, int height, int fs)
 
 int handle_keys(int key)
 {
-	if (key == SDLK_ESCAPE) exit(0);
+	if (key == SDLK_ESCAPE) return 0;
 	if (key == SDLK_a) return 0;
-	if (key == SDLK_t){
-		if (glIsEnabled(GL_TEXTURE_2D)){
-			printf("texture disabled\n");
-			glDisable(GL_TEXTURE_2D);
-		} else {
-			printf("texture enabled\n");
-			glEnable(GL_TEXTURE_2D);
-		}
-	}
 	return 1;
 }
 
@@ -301,21 +281,15 @@ void print_usage(char *argv0)
 void parse_options(int argc, char *argv[])
 {
 	int i;
-	for (i=0; i<argc; i++){
+	for (i = 1; i < argc; i++){
 		if (strcmp("--fs", argv[i]) == 0){
 			cmd_opts.fs = 1;
 		} else if (strcmp("--width", argv[i]) == 0){
-			int width;
-			sscanf(argv[i+1], " %d", &width);
-			cmd_opts.width = width;
+			sscanf(argv[i+1], " %d", &cmd_opts.width);
 		} else if (strcmp("--height", argv[i]) == 0){
-			int height;
-			sscanf(argv[i+1], " %d", &height);
-			cmd_opts.height = height;
-		} else if (strcmp("--step", argv[i]) == 0){
-			cmd_opts.step = 1;
-		} else if (strcmp("--font", argv[i]) == 0){
-			cmd_opts.font_name = argv[i+1];
+			sscanf(argv[i+1], " %d", &cmd_opts.height);
+		} else if (strcmp("--mod_val", argv[i]) == 0){
+			sscanf(argv[i+1], " %d", &cmd_opts.mod_val);
 		} else if (strcmp("--help", argv[i]) == 0){
 			print_usage(argv[0]);
 			exit(0);
