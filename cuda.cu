@@ -1,9 +1,44 @@
+#include <SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <cuda.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <time.h>
 
-#define WIDTH 100
-#define HEIGHT 100
+int handle_keys(int key)
+{
+	if (key == SDLK_ESCAPE) return 0;
+	if (key == SDLK_a) return 0;
+	return 1;
+}
+
+int handle_events(void)
+{
+	SDL_Event ev;
+	while (SDL_PollEvent(&ev)){
+		switch (ev.type){
+		case SDL_QUIT:
+			return 0;
+		case SDL_KEYDOWN:
+			return handle_keys(ev.key.keysym.sym);
+			break;
+		default: break;
+		}
+	}
+	return 1;
+}
+
+unsigned int get_elapsed (void)
+{
+	static int t1 = 0;
+	int t0 = t1;
+
+	t1=SDL_GetTicks ();
+	return t1-t0;
+}
 
 __global__ void life(char *src, char *dest, char *n, int w, int h)
 {
@@ -45,6 +80,7 @@ void init_buff(char *buff, int w, int h)
 	}
 }
 
+#if 0
 void print_ansi(char *buff, char *n, int w, int h)
 {
 	int i, j;
@@ -53,30 +89,29 @@ void print_ansi(char *buff, char *n, int w, int h)
 #define BG_GREEN 42
 #define BG_RED 41
 #define BG_BLACK 40
-#if 0
-	printf("\x1B[2J\n");
-	printf("\x1B[0;0f\n");
-#endif
 	for (i=0; i<h; i++) {
 		for (j=0; j<w; j++) {
-			printf("\x1B[%d;%d;%dm%d", BRIGHT, WHITE,
-					buff[i*h + j] ? BG_GREEN : BG_RED,
-					n[i*h + j]);
+			printf("\x1B[%d;%d;%dm ", BRIGHT, WHITE,
+					buff[i*h + j] ? BG_GREEN : BG_RED);
 		}
 		printf("\x1B[%d;%d;%dm\n", BRIGHT, WHITE, BG_BLACK);
 	}
 	printf("\n");
 }
+#endif
 
 int main(int argc, char *argv[])
 {
-	int w = 32, h = 32;
-	int i;
-	int memsz = w * h * sizeof(char);
+	unsigned int w = 1024, h = 1024;
+	long unsigned int i = 0;
+	long unsigned int t = 0;
+	unsigned long int memsz = w * h * sizeof(char);
 	char *buff[2];
 	char *ne;
 	char *n_here;
 	char *buff_here;
+
+	SDL_Init(SDL_INIT_EVERYTHING);
 
 	buff_here = (char *)malloc(memsz);
 	n_here = (char *)malloc(memsz);
@@ -84,7 +119,6 @@ int main(int argc, char *argv[])
 	memset(n_here, 0, memsz);
 
 	init_buff(buff_here, w, h);
-	print_ansi(buff_here, n_here, w, h);
 
 	cudaMalloc(&buff[0], memsz);
 	cudaMalloc(&buff[1], memsz);
@@ -93,13 +127,19 @@ int main(int argc, char *argv[])
 	cudaMemcpy(buff[0], buff_here, memsz, cudaMemcpyHostToDevice);
 	cudaMemset(ne, 0, memsz);
 
-	for (i=0; i<100000; i++){
+	while(handle_events()){
 		int j = i&1;
+
+		t += get_elapsed();
+		if (t >= 1000){
+			printf("%ld %ld\n", i, t);
+			t -= 1000;
+			i=0;
+		}
+		i++;
 		life<<<w, h>>>(buff[j], buff[j^1], ne, w, h);
 		cudaMemcpy(buff_here, buff[j^1], memsz, cudaMemcpyDeviceToHost);
-//		cudaMemcpy(n_here, ne, memsz, cudaMemcpyDeviceToHost);
 	}
-	print_ansi(buff_here, n_here, w, h);
 
 	free(buff_here);
 	free(n_here);
